@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fruits and Friends — Catch the Friends!</title>
+<style>
+  :root{
+    --sky1:#bfe9ff; --sky2:#e9f9ff; --grass1:#9be36b; --grass2:#5fb84a;
+    --ink:#1f2430; --berry:#e23b6d; --berry-d:#b3274f;
+    --gold:#ffcf3f; --panel:#fffdf5; --leaf:#4fb14f;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:"Baloo 2","Comic Sans MS",system-ui,-apple-system,sans-serif;
+    background:#0f1622; color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden; touch-action:none;
+  }
+  #wrap{
+    position:relative; width:min(100vw,520px); height:min(100vh,860px);
+    max-height:100vh; border-radius:22px; overflow:hidden;
+    box-shadow:0 18px 60px rgba(0,0,0,.5);
+    background:linear-gradient(#bfe9ff,#e9f9ff 60%);
+  }
+  canvas{display:block; width:100%; height:100%; touch-action:none;}
+
+  /* ---- Overlays ---- */
+  .screen{
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    padding:26px; gap:14px; z-index:5;
+    background:radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.18), rgba(0,0,0,.28));
+  }
+  .hidden{display:none !important;}
+  .logo{
+    font-weight:800; line-height:.95; letter-spacing:.5px;
+    color:#fff; text-shadow:0 3px 0 var(--berry-d), 0 6px 14px rgba(0,0,0,.35);
+  }
+  .logo .big{display:block; font-size:clamp(38px,12vw,62px);}
+  .logo .friends{display:block; font-size:clamp(28px,9vw,46px); color:var(--gold); text-shadow:0 3px 0 #c9920a,0 6px 12px rgba(0,0,0,.3);}
+  .tag{color:#fff; font-size:clamp(15px,4.2vw,19px); font-weight:600; text-shadow:0 2px 6px rgba(0,0,0,.45); max-width:18em;}
+  .mascot{width:clamp(120px,40vw,180px); height:auto; filter:drop-shadow(0 8px 12px rgba(0,0,0,.3)); animation:bob 2.2s ease-in-out infinite;}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-12px) rotate(3deg);}}
+  .btn{
+    border:none; cursor:pointer; font-family:inherit; font-weight:800;
+    font-size:clamp(18px,5vw,22px); color:#fff; padding:14px 34px; border-radius:999px;
+    background:linear-gradient(#ff5c8a,#e23b6d); box-shadow:0 5px 0 var(--berry-d),0 10px 18px rgba(0,0,0,.3);
+    transition:transform .06s, box-shadow .06s;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 1px 0 var(--berry-d),0 4px 10px rgba(0,0,0,.3);}
+  .btn.gold{background:linear-gradient(#ffd95e,#ffbf2e); color:#7a4d00; box-shadow:0 5px 0 #c9920a,0 10px 18px rgba(0,0,0,.3);}
+  .btn.book{background:linear-gradient(#62c46b,#3a9f4a); box-shadow:0 5px 0 #2c7a39,0 10px 18px rgba(0,0,0,.3); font-size:clamp(16px,4.4vw,19px); padding:13px 26px;}
+  .btn.book.insta{background:linear-gradient(#f9ce34,#ee2a7b 45%,#6228d7); box-shadow:0 5px 0 #4a1ca0,0 10px 18px rgba(0,0,0,.3);}
+  .btn.small{font-size:16px; padding:10px 22px;}
+  .row{display:flex; gap:12px; flex-wrap:wrap; align-items:center; justify-content:center;}
+  .card{background:rgba(255,253,245,.96); border-radius:20px; padding:22px 24px; box-shadow:0 10px 30px rgba(0,0,0,.3); display:flex; flex-direction:column; gap:14px; align-items:center; max-width:90%;}
+  .score-big{font-size:clamp(46px,14vw,72px); font-weight:800; color:var(--berry); line-height:1;}
+  .score-lbl{font-weight:700; color:#7a8190; letter-spacing:2px; font-size:14px; text-transform:uppercase;}
+  .best{color:#c9920a; font-weight:800; font-size:18px;}
+  .help{color:#fff; font-size:14px; font-weight:600; opacity:.95; text-shadow:0 2px 5px rgba(0,0,0,.45); max-width:20em;}
+  .help b{color:var(--gold);}
+
+  /* ---- HUD ---- */
+  #hud{position:absolute; top:0; left:0; right:0; z-index:4; display:flex; justify-content:space-between; align-items:flex-start; padding:14px 16px; pointer-events:none;}
+  .pill{background:rgba(255,255,255,.85); border-radius:999px; padding:7px 16px; font-weight:800; color:var(--ink); box-shadow:0 4px 10px rgba(0,0,0,.18); display:flex; align-items:center; gap:7px; font-size:18px;}
+  #timePill{color:var(--berry-d);}
+  #pauseBtn{pointer-events:auto; cursor:pointer; background:rgba(255,255,255,.85); border:none; width:40px; height:40px; border-radius:50%; font-size:18px; box-shadow:0 4px 10px rgba(0,0,0,.18);}
+  .brandline{position:absolute; bottom:10px; left:0; right:0; text-align:center; color:#fff; font-weight:700; font-size:13px; opacity:.9; text-shadow:0 2px 5px rgba(0,0,0,.4); z-index:3; pointer-events:none;}
+  .credit{font-size:12px; color:#fff; opacity:.85; text-shadow:0 1px 4px rgba(0,0,0,.4);}
+  .countdown{font-size:clamp(80px,26vw,150px); font-weight:800; color:#fff; text-shadow:0 5px 0 var(--berry-d),0 10px 20px rgba(0,0,0,.4);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="pill" id="scorePill">🍓 <span id="score">0</span></div>
+    <div class="pill" id="timePill">⏱ <span id="time">60</span></div>
+    <button id="pauseBtn" aria-label="Pause">⏸</button>
+  </div>
+  <div class="brandline" id="brandHud"></div>
+
+  <!-- START -->
+  <div class="screen" id="startScreen">
+    <svg class="mascot" id="mascotSvg" viewBox="0 0 200 200"></svg>
+    <div class="logo"><span class="big">Fruits</span><span class="friends">&amp; Friends</span></div>
+    <div class="tag">Catch the falling fruit friends in your basket!</div>
+    <button class="btn" id="playBtn">▶ Play</button>
+    <div class="help">Move the basket with your <b>finger</b> or the <b>← →</b> keys.<br>Catch fruits &amp; friends, dodge the wiggly bugs!</div>
+    <div class="credit" id="brandStart"></div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div class="screen hidden" id="countScreen" style="background:rgba(0,0,0,.25)">
+    <div class="countdown" id="countNum">3</div>
+  </div>
+
+  <!-- PAUSE -->
+  <div class="screen hidden" id="pauseScreen">
+    <div class="card">
+      <div class="logo" style="text-shadow:none;color:var(--berry)"><span style="font-size:30px">Paused</span></div>
+      <button class="btn" id="resumeBtn">▶ Resume</button>
+      <button class="btn gold small" id="quitBtn">Quit to menu</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="screen hidden" id="overScreen">
+    <div class="card">
+      <div class="score-lbl">You caught</div>
+      <div class="score-big" id="finalScore">0</div>
+      <div class="best" id="bestLine">Best: 0</div>
+      <button class="btn" id="againBtn">↻ Play Again</button>
+      <div class="row">
+        <a class="btn book" id="etsyBtn" target="_blank" rel="noopener">🧺 Get the Book on Etsy</a>
+        <a class="btn book insta" id="instaBtn" target="_blank" rel="noopener">📸 Follow on Instagram</a>
+      </div>
+    </div>
+    <div class="credit" id="brandOver"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   FRUITS AND FRIENDS — Catch the Friends!
+   Single-file browser game.  Edit CONFIG below to customize.
+   ============================================================ */
+const CONFIG = {
+  brand: "Adams Creative Co.",          // shown on screens
+  bookTitle: "Fruits and Friends",
+  etsyUrl:      "https://www.etsy.com/listing/4523144761/fruits-and-friends-coloring-book-fun",
+  instagramUrl: "https://www.instagram.com/adamscreativecompany",
+  roundSeconds: 60,
+  sound: true
+};
+
+/* ---------- Fruit characters (drawn as SVG, matching the book) ---------- */
+// Each returns an <svg> string with a cute kawaii face + bold outline.
+function face(){return `
+  <ellipse cx="36" cy="58" rx="9" ry="7" fill="#ff9db4" opacity=".7"/>
+  <ellipse cx="64" cy="58" rx="9" ry="7" fill="#ff9db4" opacity=".7"/>
+  <g fill="#1f2430"><circle cx="38" cy="46" r="6"/><circle cx="62" cy="46" r="6"/></g>
+  <circle cx="40" cy="44" r="2" fill="#fff"/><circle cx="64" cy="44" r="2" fill="#fff"/>
+  <path d="M40 60 q10 11 20 0" fill="none" stroke="#1f2430" stroke-width="3.5" stroke-linecap="round"/>`;}
+const S=(inner)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${inner}</svg>`;
+
+const FRUITS = {
+  strawberry: S(`<path d="M50 16 q-30 4-30 34 q0 30 30 40 q30-10 30-40 q0-30-30-34z" fill="#e23b6d" stroke="#1f2430" stroke-width="4"/>
+    <path d="M50 8 q-14 2-16 14 q14-6 16 2 q2-8 16-2 q-2-12-16-14z" fill="#4fb14f" stroke="#1f2430" stroke-width="4"/>
+    <g fill="#ffe27a">${[[34,40],[52,38],[66,44],[40,60],[58,62],[50,74]].map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="2.4"/>`).join('')}</g>${face()}`),
+  lemon: S(`<ellipse cx="50" cy="55" rx="33" ry="27" fill="#ffd83d" stroke="#1f2430" stroke-width="4"/>
+    ${face()}
+    <path d="M21 33 a29 22 0 0 1 58 0z" fill="#e23b6d" stroke="#1f2430" stroke-width="4"/>
+    <path d="M21 34 q-16 -1 -18 6 q12 1 19 -3z" fill="#e23b6d" stroke="#1f2430" stroke-width="4"/>
+    <path d="M21 33 a29 22 0 0 1 58 0" fill="none" stroke="#b3274f" stroke-width="2.5"/>
+    <circle cx="50" cy="12" r="3.5" fill="#e23b6d" stroke="#1f2430" stroke-width="3"/>`),
+  orange: S(`<circle cx="50" cy="54" r="33" fill="#ff9e2c" stroke="#1f2430" stroke-width="4"/>
+    <path d="M50 21 q-4-9 4-12 q-2 7 4 11z" fill="#4fb14f" stroke="#1f2430" stroke-width="3"/>${face()}`),
+  grape: S(`<g fill="#9d6be0" stroke="#1f2430" stroke-width="3">
+      ${[[50,30],[38,42],[62,42],[50,46],[44,58],[56,58],[50,70]].map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="11"/>`).join('')}</g>
+    <path d="M50 22 q3-10 12-12" stroke="#4fb14f" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <g transform="translate(0,8)">${face()}</g>`),
+  watermelon: S(`<path d="M16 40 a34 34 0 0 0 68 0z" fill="#ff5c7a" stroke="#1f2430" stroke-width="4"/>
+    <path d="M16 40 a34 34 0 0 0 68 0" fill="none" stroke="#fff" stroke-width="5"/>
+    <path d="M12 40 a38 38 0 0 0 76 0" fill="none" stroke="#4fb14f" stroke-width="6"/>
+    <g fill="#1f2430"><circle cx="38" cy="52" r="2.4"/><circle cx="58" cy="50" r="2.4"/><circle cx="50" cy="62" r="2.4"/></g>
+    <g transform="translate(0,-2)">${face()}</g>`),
+  kiwi: S(`<circle cx="50" cy="52" r="33" fill="#7a4a25" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="50" cy="52" r="25" fill="#a7d957"/><circle cx="50" cy="52" r="9" fill="#f2f7e0"/>
+    <g fill="#1f2430">${Array.from({length:10},(_,i)=>{const a=i/10*6.283;return `<circle cx="${50+Math.cos(a)*16}" cy="${52+Math.sin(a)*16}" r="1.6"/>`}).join('')}</g>
+    <g transform="translate(0,-4) scale(.9) translate(5,6)">${face()}</g>`),
+  peach: S(`<path d="M50 18 q-30 0-30 32 q0 30 30 36 q30-6 30-36 q0-32-30-32z" fill="#ffb07c" stroke="#1f2430" stroke-width="4"/>
+    <path d="M50 24 q-8 18 0 50" stroke="#e8895c" stroke-width="3" fill="none"/>
+    <path d="M50 18 q2-9 12-10" stroke="#4fb14f" stroke-width="4" fill="none" stroke-linecap="round"/>${face()}`),
+  pineapple: S(`<path d="M40 14 q-4 12 4 16 m16-16 q4 12-4 16 m-6-20 v18" stroke="#4fb14f" stroke-width="4" fill="none" stroke-linecap="round"/>
+    <ellipse cx="50" cy="58" rx="26" ry="30" fill="#ffce3d" stroke="#1f2430" stroke-width="4"/>
+    <g stroke="#c98a17" stroke-width="2">${[40,55,70].map(y=>`<path d="M28 ${y} L72 ${y}"/>`).concat([40,55].map(()=> '')).join('')}
+      <path d="M40 34 L60 82 M60 34 L40 82 M50 32 L50 84"/></g>
+    <g transform="translate(0,2)">${face()}</g>`)
+};
+/* ---------- Animal friends (the "Friends" in Fruits & Friends) ---------- */
+const aEyes=`<g fill="#1f2430"><circle cx="40" cy="50" r="5"/><circle cx="60" cy="50" r="5"/></g><circle cx="42" cy="48" r="1.7" fill="#fff"/><circle cx="62" cy="48" r="1.7" fill="#fff"/>`;
+const aCheek=`<ellipse cx="31" cy="60" rx="6" ry="4" fill="#ff9db4" opacity=".6"/><ellipse cx="69" cy="60" rx="6" ry="4" fill="#ff9db4" opacity=".6"/>`;
+const FRIENDS = {
+  dog: S(`<path d="M24 48 q-12 2 -10 20 q2 10 12 6z" fill="#caa56b" stroke="#1f2430" stroke-width="4"/>
+    <path d="M76 48 q12 2 10 20 q-2 10 -12 6z" fill="#caa56b" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="50" cy="55" r="30" fill="#f0d6a8" stroke="#1f2430" stroke-width="4"/>
+    <path d="M50 26 a30 30 0 0 0 -27 18 q13 -3 27 1z" fill="#caa56b"/>${aEyes}
+    <ellipse cx="50" cy="64" rx="6" ry="5" fill="#1f2430"/>
+    <path d="M50 69 v5 M50 74 q-6 4 -10 1 M50 74 q6 4 10 1" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>${aCheek}`),
+  cat: S(`<path d="M28 34 L23 12 L45 30z" fill="#f3a14a" stroke="#1f2430" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M72 34 L77 12 L55 30z" fill="#f3a14a" stroke="#1f2430" stroke-width="4" stroke-linejoin="round"/>
+    <circle cx="50" cy="53" r="29" fill="#f7b86a" stroke="#1f2430" stroke-width="4"/>${aEyes}
+    <path d="M46 60 l4 4 l4 -4z" fill="#e87aa0" stroke="#1f2430" stroke-width="2"/>
+    <path d="M50 64 q-5 5 -11 4 M50 64 q5 5 11 4" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <g stroke="#1f2430" stroke-width="2"><path d="M30 56 h-15 M30 61 h-15 M70 56 h15 M70 61 h15"/></g>${aCheek}`),
+  bunny: S(`<ellipse cx="40" cy="20" rx="8" ry="19" fill="#fdfdfd" stroke="#1f2430" stroke-width="4"/>
+    <ellipse cx="60" cy="20" rx="8" ry="19" fill="#fdfdfd" stroke="#1f2430" stroke-width="4"/>
+    <ellipse cx="40" cy="20" rx="3.5" ry="12" fill="#ff9db4"/><ellipse cx="60" cy="20" rx="3.5" ry="12" fill="#ff9db4"/>
+    <circle cx="50" cy="57" r="27" fill="#fdfdfd" stroke="#1f2430" stroke-width="4"/>${aEyes}
+    <path d="M46 62 l4 4 l4 -4z" fill="#e87aa0" stroke="#1f2430" stroke-width="2"/>
+    <path d="M50 66 v3 M50 69 q-4 3 -8 1 M50 69 q4 3 8 1" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>${aCheek}`),
+  monkey: S(`<circle cx="24" cy="44" r="12" fill="#9c6b3f" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="76" cy="44" r="12" fill="#9c6b3f" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="24" cy="44" r="6" fill="#d8b483"/><circle cx="76" cy="44" r="6" fill="#d8b483"/>
+    <circle cx="50" cy="53" r="28" fill="#9c6b3f" stroke="#1f2430" stroke-width="4"/>
+    <path d="M50 80 q-21 0 -21 -19 q0 -15 21 -15 q21 0 21 15 q0 19 -21 19z" fill="#e7c79a" stroke="#1f2430" stroke-width="3"/>${aEyes}
+    <ellipse cx="45" cy="64" rx="2.5" ry="3.2" fill="#1f2430"/><ellipse cx="55" cy="64" rx="2.5" ry="3.2" fill="#1f2430"/>
+    <path d="M40 70 q10 7 20 0" stroke="#1f2430" stroke-width="3" fill="none" stroke-linecap="round"/>`),
+  bear: S(`<circle cx="30" cy="29" r="13" fill="#a9794a" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="70" cy="29" r="13" fill="#a9794a" stroke="#1f2430" stroke-width="4"/>
+    <circle cx="30" cy="29" r="6" fill="#caa06b"/><circle cx="70" cy="29" r="6" fill="#caa06b"/>
+    <circle cx="50" cy="55" r="30" fill="#bd9160" stroke="#1f2430" stroke-width="4"/>
+    <ellipse cx="50" cy="65" rx="15" ry="12" fill="#e7cda3" stroke="#1f2430" stroke-width="3"/>${aEyes}
+    <ellipse cx="50" cy="61" rx="5" ry="4" fill="#1f2430"/>
+    <path d="M50 65 v4 M50 69 q-5 3 -8 1 M50 69 q5 3 8 1" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>${aCheek}`)
+};
+const CHARS = Object.assign({}, FRUITS, FRIENDS);
+const CHAR_KEYS = Object.keys(CHARS);
+const BUG = S(`<ellipse cx="50" cy="56" rx="26" ry="18" fill="#8bd24a" stroke="#1f2430" stroke-width="4"/>
+  <circle cx="50" cy="40" r="13" fill="#8bd24a" stroke="#1f2430" stroke-width="4"/>
+  <path d="M44 30 q-4-8-10-8 M56 30 q4-8 10-8" stroke="#1f2430" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <circle cx="44" cy="40" r="3" fill="#1f2430"/><circle cx="56" cy="40" r="3" fill="#1f2430"/>
+  <path d="M44 46 q6 5 12 0" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <path d="M30 54 h-12 M30 62 h-12 M70 54 h12 M70 62 h12" stroke="#1f2430" stroke-width="3" stroke-linecap="round"/>`);
+
+// Mascot for the title screen (bigger strawberry)
+document.getElementById('mascotSvg').innerHTML = FRUITS.strawberry.replace(/<\/?svg[^>]*>/g,'');
+
+/* ---------- Preload SVGs into Images for fast canvas drawing ---------- */
+const imgCache = {};
+function toImg(svg){const i=new Image(); i.src='data:image/svg+xml;utf8,'+encodeURIComponent(svg); return i;}
+CHAR_KEYS.forEach(k=>imgCache[k]=toImg(CHARS[k]));
+imgCache.bug = toImg(BUG);
+
+/* ---------- Canvas setup ---------- */
+const cv=document.getElementById('game'), ctx=cv.getContext('2d');
+let W=0,H=0,DPR=Math.min(window.devicePixelRatio||1,2);
+function resize(){
+  const r=cv.getBoundingClientRect(); W=r.width; H=r.height;
+  cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);
+
+/* ---------- Sound (tiny WebAudio blips) ---------- */
+let actx=null;
+function blip(freq,dur=0.09,type='sine',vol=0.18){
+  if(!CONFIG.sound) return;
+  try{ actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.type=type;o.frequency.value=freq;o.connect(g);g.connect(actx.destination);
+    g.gain.setValueAtTime(vol,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001,actx.currentTime+dur);
+    o.start();o.stop(actx.currentTime+dur);
+  }catch(e){}
+}
+const sCatch=()=>{blip(660,.08,'triangle');setTimeout(()=>blip(880,.08,'triangle'),70);};
+const sBonus=()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>blip(f,.1,'square',.14),i*70));};
+const sBug=()=>blip(150,.18,'sawtooth',.18);
+
+/* ---------- Game state ---------- */
+let state='start';      // start | playing | paused | over
+let basket, items, score, timeLeft, spawnT, gameT, lastTs, speedMul, rafId;
+let best = +(localStorage.getItem('ff_best')||0);
+
+function newBasket(){ return {x:W/2, y:H-70, w:Math.min(120,W*0.26), tx:W/2}; }
+
+function startGame(){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
+  hud.classList.remove('hidden'); brandHud.classList.add('hidden');
+  basket=newBasket(); items=[]; score=0; timeLeft=CONFIG.roundSeconds;
+  spawnT=0; gameT=0; speedMul=1; scoreEl.textContent=0; timeEl.textContent=timeLeft;
+  // 3-2-1 countdown
+  countScreen.classList.remove('hidden');
+  let n=3; countNum.textContent=n; blip(440,.12);
+  const iv=setInterval(()=>{ n--; if(n>0){countNum.textContent=n;blip(440,.12);}
+    else{ countNum.textContent='GO!'; blip(880,.2); setTimeout(()=>{
+      clearInterval(iv); countScreen.classList.add('hidden'); state='playing'; lastTs=performance.now();
+      rafId=requestAnimationFrame(loop);
+    },450);} },650);
+}
+
+function spawn(){
+  const bug = Math.random()<0.16;
+  const golden = !bug && Math.random()<0.08;
+  const key = bug?'bug':CHAR_KEYS[(Math.random()*CHAR_KEYS.length)|0];
+  const size = bug?52:(golden?70:58);
+  items.push({
+    x: 28+Math.random()*(W-56), y:-40, key, bug, golden,
+    size, vy:(90+Math.random()*60)*(golden?0.8:1)*speedMul,
+    rot:(Math.random()-0.5)*0.6, vr:(Math.random()-0.5)*1.6, t:0
+  });
+}
+
+function update(dt){
+  gameT+=dt; timeLeft=Math.max(0,CONFIG.roundSeconds-gameT);
+  timeEl.textContent=Math.ceil(timeLeft);
+  speedMul=1+gameT/90;                         // gentle ramp
+  spawnT-=dt;
+  const interval=Math.max(0.45,0.95-gameT*0.006);
+  if(spawnT<=0){ spawn(); spawnT=interval; }
+
+  // basket follow (smooth)
+  basket.x += (basket.tx-basket.x)*Math.min(1,dt*14);
+  basket.x=Math.max(basket.w/2,Math.min(W-basket.w/2,basket.x));
+
+  const catchY=basket.y-6, half=basket.w/2;
+  for(let i=items.length-1;i>=0;i--){
+    const it=items[i]; it.t+=dt; it.y+=it.vy*dt; it.rot+=it.vr*dt;
+    // catch
+    if(it.y+it.size*0.3>catchY && it.y<catchY+30 && Math.abs(it.x-basket.x)<half-6){
+      items.splice(i,1);
+      if(it.bug){ score=Math.max(0,score-3); sBug(); pop(it.x,it.y,'#e23b6d','-3'); shake=8; }
+      else if(it.golden){ score+=5; sBonus(); pop(it.x,it.y,'#ffcf3f','+5'); }
+      else{ score+=1; sCatch(); pop(it.x,it.y,'#4fb14f','+1'); }
+      scoreEl.textContent=score; continue;
+    }
+    if(it.y>H+50) items.splice(i,1);
+  }
+  // floating score popups
+  for(let i=pops.length-1;i>=0;i--){ const p=pops[i]; p.y-=40*dt; p.life-=dt; if(p.life<=0)pops.splice(i,1); }
+  if(shake>0) shake-=dt*40;
+  if(timeLeft<=0) endGame();
+}
+
+let pops=[], shake=0;
+function pop(x,y,color,txt){ pops.push({x,y,color,txt,life:0.8}); }
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  const sx=shake>0?(Math.random()-0.5)*shake:0;
+  ctx.save(); ctx.translate(sx,0);
+  // background scenery
+  drawBg();
+  // items
+  for(const it of items){
+    const img=imgCache[it.key];
+    ctx.save(); ctx.translate(it.x,it.y); ctx.rotate(it.rot);
+    if(it.golden){ ctx.shadowColor='#ffd23f'; ctx.shadowBlur=18; }
+    const s=it.size; if(img.complete) ctx.drawImage(img,-s/2,-s/2,s,s);
+    ctx.restore();
+  }
+  drawBasket();
+  // popups
+  ctx.textAlign='center'; ctx.font='800 22px "Baloo 2",sans-serif';
+  for(const p of pops){ ctx.globalAlpha=Math.max(0,p.life); ctx.fillStyle=p.color;
+    ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.strokeText(p.txt,p.x,p.y); ctx.fillText(p.txt,p.x,p.y); }
+  ctx.globalAlpha=1; ctx.restore();
+}
+
+function drawBg(){
+  // grass hills
+  ctx.fillStyle='#9be36b'; ctx.beginPath();
+  ctx.moveTo(0,H); ctx.lineTo(0,H-90);
+  ctx.quadraticCurveTo(W*0.3,H-130,W*0.55,H-95);
+  ctx.quadraticCurveTo(W*0.8,H-65,W,H-100); ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#5fb84a'; ctx.beginPath();
+  ctx.moveTo(0,H); ctx.lineTo(0,H-45);
+  ctx.quadraticCurveTo(W*0.5,H-80,W,H-45); ctx.lineTo(W,H); ctx.closePath(); ctx.fill();
+  // sun
+  ctx.fillStyle='#ffe27a'; ctx.beginPath(); ctx.arc(W-46,52,26,0,7); ctx.fill();
+}
+
+function drawBasket(){
+  const x=basket.x, y=basket.y, w=basket.w, h=w*0.46;
+  ctx.save(); ctx.translate(x,y);
+  // body
+  ctx.fillStyle='#c8843e'; ctx.strokeStyle='#1f2430'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(-w/2,-h/2); ctx.lineTo(w/2,-h/2);
+  ctx.lineTo(w*0.36,h/2); ctx.lineTo(-w*0.36,h/2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  // weave
+  ctx.lineWidth=2; ctx.strokeStyle='#8a531f';
+  for(let i=-w/2+10;i<w/2;i+=14){ctx.beginPath();ctx.moveTo(i,-h/2);ctx.lineTo(i*0.72,h/2);ctx.stroke();}
+  for(let j=-h/2+10;j<h/2;j+=10){ctx.beginPath();ctx.moveTo(-w/2*(1-(j+h/2)/h*0.28),j);ctx.lineTo(w/2*(1-(j+h/2)/h*0.28),j);ctx.stroke();}
+  // rim
+  ctx.fillStyle='#e0a45a'; ctx.strokeStyle='#1f2430'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.ellipse(0,-h/2,w/2+4,9,0,0,7); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function loop(ts){
+  if(state!=='playing') return;
+  let dt=(ts-lastTs)/1000; lastTs=ts; if(dt>0.05)dt=0.05;
+  update(dt); draw();
+  rafId=requestAnimationFrame(loop);
+}
+
+function endGame(){
+  state='over'; cancelAnimationFrame(rafId);
+  if(score>best){ best=score; localStorage.setItem('ff_best',best); }
+  finalScore.textContent=score;
+  bestLine.textContent=(score>=best?'🏆 New Best! ':'Best: ')+best;
+  hud.classList.add('hidden'); brandHud.classList.remove('hidden');
+  overScreen.classList.remove('hidden');
+}
+
+/* ---------- Controls ---------- */
+function setTarget(clientX){
+  const r=cv.getBoundingClientRect();
+  if(basket) basket.tx=Math.max(basket.w/2,Math.min(W-basket.w/2,clientX-r.left));
+}
+cv.addEventListener('pointermove',e=>{if(state==='playing')setTarget(e.clientX);});
+cv.addEventListener('pointerdown',e=>{if(state==='playing')setTarget(e.clientX);});
+let keyDir=0;
+window.addEventListener('keydown',e=>{
+  if(e.key==='ArrowLeft')keyDir=-1; else if(e.key==='ArrowRight')keyDir=1;
+  else if(e.key===' '&&state==='start')startGame();
+  else if((e.key==='p'||e.key==='Escape')&&state==='playing')doPause();
+});
+window.addEventListener('keyup',e=>{if((e.key==='ArrowLeft'&&keyDir<0)||(e.key==='ArrowRight'&&keyDir>0))keyDir=0;});
+// apply keyboard movement
+setInterval(()=>{ if(state==='playing'&&keyDir&&basket){ basket.tx=Math.max(basket.w/2,Math.min(W-basket.w/2,basket.tx+keyDir*22)); }},16);
+
+/* ---------- Pause ---------- */
+function doPause(){ if(state!=='playing')return; state='paused'; cancelAnimationFrame(rafId); pauseScreen.classList.remove('hidden'); }
+function doResume(){ if(state!=='paused')return; pauseScreen.classList.add('hidden'); state='playing'; lastTs=performance.now(); rafId=requestAnimationFrame(loop); }
+
+/* ---------- DOM refs & wiring ---------- */
+const hud=document.getElementById('hud'), scoreEl=document.getElementById('score'),
+  timeEl=document.getElementById('time'), brandHud=document.getElementById('brandHud'),
+  startScreen=document.getElementById('startScreen'), countScreen=document.getElementById('countScreen'),
+  countNum=document.getElementById('countNum'), pauseScreen=document.getElementById('pauseScreen'),
+  overScreen=document.getElementById('overScreen'), finalScore=document.getElementById('finalScore'),
+  bestLine=document.getElementById('bestLine');
+
+document.getElementById('playBtn').onclick=()=>{actx&&actx.resume&&actx.resume();startGame();};
+document.getElementById('againBtn').onclick=startGame;
+document.getElementById('pauseBtn').onclick=doPause;
+document.getElementById('resumeBtn').onclick=doResume;
+document.getElementById('quitBtn').onclick=()=>{state='start';pauseScreen.classList.add('hidden');overScreen.classList.add('hidden');hud.classList.add('hidden');startScreen.classList.remove('hidden');brandHud.classList.add('hidden');menuScene();};
+
+// draw a calm grass+sun scene behind the menus so the canvas is never blank
+function menuScene(){ ctx.clearRect(0,0,W,H); drawBg(); }
+
+// brand + links
+const brandTxt='✨ '+CONFIG.bookTitle+' • '+CONFIG.brand;
+document.getElementById('brandStart').textContent=brandTxt;
+document.getElementById('brandOver').textContent=brandTxt;
+brandHud.textContent=brandTxt;
+document.getElementById('etsyBtn').href=CONFIG.etsyUrl;
+document.getElementById('instaBtn').href=CONFIG.instagramUrl;
+
+resize(); menuScene();
+</script>
+</body>
+</html>
