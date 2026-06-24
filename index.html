@@ -61,6 +61,13 @@
   .best{color:#c9920a; font-weight:800; font-size:18px;}
   .help{color:#fff; font-size:14px; font-weight:600; opacity:.95; text-shadow:0 2px 5px rgba(0,0,0,.45); max-width:20em;}
   .help b{color:var(--gold);}
+  .seg-lbl{color:#fff; font-weight:800; font-size:13px; letter-spacing:2px; text-transform:uppercase; opacity:.92; text-shadow:0 2px 5px rgba(0,0,0,.4); margin-bottom:-8px;}
+  .seg{display:flex; background:rgba(0,0,0,.24); border-radius:999px; padding:4px; gap:2px;}
+  .seg button{border:none; cursor:pointer; font-family:inherit; font-weight:800; font-size:15px; color:#fff; background:transparent; padding:9px 18px; border-radius:999px; transition:background .12s;}
+  .seg button.on{background:#fff; color:var(--berry);}
+  .mini{border:none; cursor:pointer; font-family:inherit; font-weight:700; font-size:14px; color:#fff; background:rgba(0,0,0,.28); padding:9px 18px; border-radius:999px;}
+  .mini:active{transform:translateY(2px);}
+  img.mascot{object-fit:contain;}
 
   /* ---- HUD ---- */
   #hud{position:absolute; top:0; left:0; right:0; z-index:4; display:flex; justify-content:space-between; align-items:flex-start; padding:14px 16px; pointer-events:none;}
@@ -82,14 +89,22 @@
     <div class="pill" id="timePill">⏱ <span id="time">60</span></div>
     <button id="pauseBtn" aria-label="Pause">⏸</button>
   </div>
-  <div class="brandline" id="brandHud"></div>
+  <div class="brandline hidden" id="brandHud"></div>
 
   <!-- START -->
   <div class="screen" id="startScreen">
+    <img class="mascot" id="mascotImg" alt="Strawberry mascot" hidden>
     <svg class="mascot" id="mascotSvg" viewBox="0 0 200 200"></svg>
     <div class="logo"><span class="big">Fruits</span><span class="friends">&amp; Friends</span></div>
     <div class="tag">Catch the falling fruit friends in your basket!</div>
+    <div class="seg-lbl">Difficulty</div>
+    <div class="seg" id="diffSeg">
+      <button data-d="easy">Easy</button>
+      <button data-d="normal">Normal</button>
+      <button data-d="hard">Hard</button>
+    </div>
     <button class="btn" id="playBtn">▶ Play</button>
+    <button class="mini" id="musicBtn">🎵 Music: On</button>
     <div class="help">Move the basket with your <b>finger</b> or the <b>← →</b> keys.<br>Catch fruits &amp; friends, dodge the wiggly bugs!</div>
     <div class="credit" id="brandStart"></div>
   </div>
@@ -104,6 +119,7 @@
     <div class="card">
       <div class="logo" style="text-shadow:none;color:var(--berry)"><span style="font-size:30px">Paused</span></div>
       <button class="btn" id="resumeBtn">▶ Resume</button>
+      <button class="mini" id="musicBtn2">🎵 Music: On</button>
       <button class="btn gold small" id="quitBtn">Quit to menu</button>
     </div>
   </div>
@@ -137,6 +153,15 @@ const CONFIG = {
   roundSeconds: 60,
   sound: true
 };
+
+/* ---------- Difficulty levels (chosen on the title screen) ---------- */
+const DIFFS = {
+  easy:   {speed:0.78, interval:1.05, bug:0.10, basket:1.30, golden:0.10},
+  normal: {speed:1.00, interval:0.92, bug:0.16, basket:1.00, golden:0.08},
+  hard:   {speed:1.35, interval:0.74, bug:0.24, basket:0.84, golden:0.06}
+};
+let diffKey = localStorage.getItem('ff_diff') || 'normal';
+let diff = DIFFS[diffKey] || (diffKey='normal', DIFFS.normal);
 
 /* ---------- Fruit characters (drawn as SVG, matching the book) ---------- */
 // Each returns an <svg> string with a cute kawaii face + bold outline.
@@ -228,8 +253,42 @@ const BUG = S(`<ellipse cx="50" cy="56" rx="26" ry="18" fill="#8bd24a" stroke="#
   <path d="M44 46 q6 5 12 0" stroke="#1f2430" stroke-width="2.5" fill="none" stroke-linecap="round"/>
   <path d="M30 54 h-12 M30 62 h-12 M70 54 h12 M70 62 h12" stroke="#1f2430" stroke-width="3" stroke-linecap="round"/>`);
 
-// Mascot for the title screen (bigger strawberry)
-document.getElementById('mascotSvg').innerHTML = FRUITS.strawberry.replace(/<\/?svg[^>]*>/g,'');
+// Title-screen mascot: a detailed full-body strawberry (matches the book cover).
+// If a real photo cutout named "mascot.png" sits next to this file, it is used automatically.
+const MASCOT_INNER = `
+  <!-- arms (dark outline + berry fill) -->
+  <path d="M60 112 q-20 6 -32 24" stroke="#1f2430" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <path d="M140 106 q22 -4 30 -28" stroke="#1f2430" stroke-width="14" fill="none" stroke-linecap="round"/>
+  <path d="M60 112 q-20 6 -32 24" stroke="#e23b6d" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <path d="M140 106 q22 -4 30 -28" stroke="#e23b6d" stroke-width="8" fill="none" stroke-linecap="round"/>
+  <circle cx="27" cy="138" r="9" fill="#e23b6d" stroke="#1f2430" stroke-width="4"/>
+  <circle cx="171" cy="76" r="9" fill="#e23b6d" stroke="#1f2430" stroke-width="4"/>
+  <!-- legs + blue boots -->
+  <path d="M86 152 V172" stroke="#1f2430" stroke-width="7" stroke-linecap="round"/>
+  <path d="M114 152 V172" stroke="#1f2430" stroke-width="7" stroke-linecap="round"/>
+  <path d="M74 168 q-3 12 11 12 q9 0 9 -7 v-9z" fill="#5aa9e6" stroke="#1f2430" stroke-width="4"/>
+  <path d="M106 168 q-3 12 11 12 q9 0 9 -7 v-9z" fill="#5aa9e6" stroke="#1f2430" stroke-width="4"/>
+  <!-- body -->
+  <path d="M100 66 q-46 5 -46 52 q0 44 46 60 q46 -16 46 -60 q0 -47 -46 -52z" fill="#e23b6d" stroke="#1f2430" stroke-width="5"/>
+  <!-- leafy crown + stem -->
+  <path d="M100 38 v16" stroke="#1f2430" stroke-width="6" stroke-linecap="round"/>
+  <path d="M100 52 q-24 0 -28 22 q22 -12 28 2 q6 -14 28 -2 q-4 -22 -28 -22z" fill="#4fb14f" stroke="#1f2430" stroke-width="5"/>
+  <!-- seeds -->
+  <g fill="#ffe27a">${[[80,104],[118,100],[132,120],[74,130],[100,128],[122,140],[92,148]].map(p=>`<path d="M${p[0]} ${p[1]} l3 5 l-3 3 l-3 -3z"/>`).join('')}</g>
+  <!-- face -->
+  <ellipse cx="76" cy="130" rx="11" ry="8" fill="#ff9db4" opacity=".75"/>
+  <ellipse cx="124" cy="130" rx="11" ry="8" fill="#ff9db4" opacity=".75"/>
+  <g fill="#1f2430"><circle cx="85" cy="114" r="7.5"/><circle cx="115" cy="114" r="7.5"/></g>
+  <circle cx="88" cy="111" r="2.5" fill="#fff"/><circle cx="118" cy="111" r="2.5" fill="#fff"/>
+  <path d="M86 130 q14 14 28 0" fill="none" stroke="#1f2430" stroke-width="4" stroke-linecap="round"/>`;
+document.getElementById('mascotSvg').innerHTML = MASCOT_INNER;
+// auto-swap to a real photo cutout if present
+(function(){
+  const mi=document.getElementById('mascotImg'), ms=document.getElementById('mascotSvg');
+  mi.onload=()=>{ if(mi.naturalWidth>1){ mi.hidden=false; ms.style.display='none'; } };
+  mi.onerror=()=>{ mi.remove(); };
+  mi.src='mascot.png';
+})();
 
 /* ---------- Preload SVGs into Images for fast canvas drawing ---------- */
 const imgCache = {};
@@ -262,12 +321,50 @@ const sCatch=()=>{blip(660,.08,'triangle');setTimeout(()=>blip(880,.08,'triangle
 const sBonus=()=>{[523,659,784,1046].forEach((f,i)=>setTimeout(()=>blip(f,.1,'square',.14),i*70));};
 const sBug=()=>blip(150,.18,'sawtooth',.18);
 
+/* ---------- Background music (gentle looping WebAudio tune, no files) ---------- */
+let musOn = localStorage.getItem('ff_music')!=='off';
+const SPB=60/108, nf=m=>440*Math.pow(2,(m-69)/12);        // 108 BPM, midi->Hz
+const MLEAD=[76,79,84,79, 74,79,83,79, 72,76,81,76, 69,72,77,72];  // C G Am F, cheerful
+const MBASS=[48,null,null,null, 43,null,null,null, 45,null,null,null, 41,null,null,null];
+let musTimer=null, musAt=0;
+function musVoice(freq,t,dur,type,vol){
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.value=freq;o.connect(g);g.connect(actx.destination);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.start(t);o.stop(t+dur+0.05);
+}
+function musScheduler(){
+  if(!musOn||!actx) return;
+  while(musAt < actx.currentTime+0.3){
+    const beat=Math.round(musAt/SPB), idx=((beat%16)+16)%16;
+    musVoice(nf(MLEAD[idx]),musAt,SPB*0.9,'triangle',0.045);
+    if(MBASS[idx]!=null) musVoice(nf(MBASS[idx]),musAt,SPB*1.9,'sine',0.05);
+    musAt+=SPB;
+  }
+}
+function startMusic(){
+  if(!musOn) return;
+  actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+  if(actx.state==='suspended') actx.resume();
+  if(musTimer) return;
+  musAt=actx.currentTime+0.15;
+  musTimer=setInterval(musScheduler,60);
+}
+function stopMusic(){ if(musTimer){clearInterval(musTimer);musTimer=null;} }
+function updateMusicBtns(){ const t='🎵 Music: '+(musOn?'On':'Off');
+  ['musicBtn','musicBtn2'].forEach(id=>{const b=document.getElementById(id); if(b)b.textContent=t;}); }
+function toggleMusic(){ musOn=!musOn; localStorage.setItem('ff_music',musOn?'on':'off');
+  if(musOn){ if(state==='playing'||state==='paused') startMusic(); } else stopMusic();
+  updateMusicBtns(); }
+
 /* ---------- Game state ---------- */
 let state='start';      // start | playing | paused | over
 let basket, items, score, timeLeft, spawnT, gameT, lastTs, speedMul, rafId;
 let best = +(localStorage.getItem('ff_best')||0);
 
-function newBasket(){ return {x:W/2, y:H-70, w:Math.min(120,W*0.26), tx:W/2}; }
+function newBasket(){ return {x:W/2, y:H-70, w:Math.min(120,W*0.26)*diff.basket, tx:W/2}; }
 
 function startGame(){
   document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden'));
@@ -285,13 +382,13 @@ function startGame(){
 }
 
 function spawn(){
-  const bug = Math.random()<0.16;
-  const golden = !bug && Math.random()<0.08;
+  const bug = Math.random()<diff.bug;
+  const golden = !bug && Math.random()<diff.golden;
   const key = bug?'bug':CHAR_KEYS[(Math.random()*CHAR_KEYS.length)|0];
   const size = bug?52:(golden?70:58);
   items.push({
     x: 28+Math.random()*(W-56), y:-40, key, bug, golden,
-    size, vy:(90+Math.random()*60)*(golden?0.8:1)*speedMul,
+    size, vy:(90+Math.random()*60)*diff.speed*(golden?0.8:1)*speedMul,
     rot:(Math.random()-0.5)*0.6, vr:(Math.random()-0.5)*1.6, t:0
   });
 }
@@ -301,7 +398,7 @@ function update(dt){
   timeEl.textContent=Math.ceil(timeLeft);
   speedMul=1+gameT/90;                         // gentle ramp
   spawnT-=dt;
-  const interval=Math.max(0.45,0.95-gameT*0.006);
+  const interval=Math.max(0.40,diff.interval-gameT*0.006);
   if(spawnT<=0){ spawn(); spawnT=interval; }
 
   // basket follow (smooth)
@@ -390,7 +487,7 @@ function loop(ts){
 }
 
 function endGame(){
-  state='over'; cancelAnimationFrame(rafId);
+  state='over'; cancelAnimationFrame(rafId); stopMusic();
   if(score>best){ best=score; localStorage.setItem('ff_best',best); }
   finalScore.textContent=score;
   bestLine.textContent=(score>=best?'🏆 New Best! ':'Best: ')+best;
@@ -427,11 +524,24 @@ const hud=document.getElementById('hud'), scoreEl=document.getElementById('score
   overScreen=document.getElementById('overScreen'), finalScore=document.getElementById('finalScore'),
   bestLine=document.getElementById('bestLine');
 
-document.getElementById('playBtn').onclick=()=>{actx&&actx.resume&&actx.resume();startGame();};
-document.getElementById('againBtn').onclick=startGame;
+function play(){ startGame(); startMusic(); }
+document.getElementById('playBtn').onclick=play;
+document.getElementById('againBtn').onclick=play;
 document.getElementById('pauseBtn').onclick=doPause;
 document.getElementById('resumeBtn').onclick=doResume;
-document.getElementById('quitBtn').onclick=()=>{state='start';pauseScreen.classList.add('hidden');overScreen.classList.add('hidden');hud.classList.add('hidden');startScreen.classList.remove('hidden');brandHud.classList.add('hidden');menuScene();};
+document.getElementById('quitBtn').onclick=()=>{state='start';stopMusic();pauseScreen.classList.add('hidden');overScreen.classList.add('hidden');hud.classList.add('hidden');startScreen.classList.remove('hidden');brandHud.classList.add('hidden');menuScene();};
+
+// difficulty selector
+const diffSeg=document.getElementById('diffSeg');
+[...diffSeg.children].forEach(b=>{
+  b.classList.toggle('on', b.dataset.d===diffKey);
+  b.onclick=()=>{ diffKey=b.dataset.d; diff=DIFFS[diffKey]; localStorage.setItem('ff_diff',diffKey);
+    [...diffSeg.children].forEach(x=>x.classList.toggle('on',x===b)); blip(720,.06,'triangle'); };
+});
+// music toggle
+document.getElementById('musicBtn').onclick=toggleMusic;
+document.getElementById('musicBtn2').onclick=toggleMusic;
+updateMusicBtns();
 
 // draw a calm grass+sun scene behind the menus so the canvas is never blank
 function menuScene(){ ctx.clearRect(0,0,W,H); drawBg(); }
