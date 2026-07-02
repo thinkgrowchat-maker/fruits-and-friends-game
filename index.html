@@ -69,6 +69,27 @@
   .mini:active{transform:translateY(2px);}
   img.mascot{object-fit:contain;}
 
+  /* ---- Leaderboard ---- */
+  .card.scroll{max-height:90vh; overflow-y:auto;}
+  .lb{width:100%; display:flex; flex-direction:column; gap:8px;}
+  .lb-entry{display:flex; gap:8px; width:100%;}
+  #nameInput{flex:1; min-width:0; font-family:inherit; font-weight:700; font-size:16px; color:var(--ink);
+    padding:11px 14px; border-radius:12px; border:2px solid #e5ddc2; background:#fff; outline:none;}
+  #nameInput:focus{border-color:var(--berry);}
+  #submitBtn{white-space:nowrap;}
+  .lb-status{font-size:13px; font-weight:700; color:#3a9f4a; min-height:15px;}
+  .lb-status.err{color:#d08a3a;}
+  .lb-head{font-weight:800; color:#7a8190; font-size:13px; letter-spacing:1.5px; text-transform:uppercase;}
+  .lb-list{list-style:none; margin:0; padding:0; width:100%; max-height:34vh; overflow-y:auto;
+    border-radius:12px; background:rgba(0,0,0,.035);}
+  .lb-list li{display:flex; align-items:center; gap:10px; padding:8px 12px; font-weight:700; font-size:16px;}
+  .lb-list li+li{border-top:1px solid rgba(0,0,0,.06);}
+  .lb-list li.me{background:#fff3c4;}
+  .lb-rank{width:30px; text-align:center; font-weight:800; color:#b9992f;}
+  .lb-nm{flex:1; text-align:left; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lb-sc{color:var(--berry); font-weight:800;}
+  .lb-empty{padding:14px; color:#9aa1ad; font-weight:600; font-size:14px; text-align:center; justify-content:center;}
+
   /* ---- HUD ---- */
   #hud{position:absolute; top:0; left:0; right:0; z-index:4; display:flex; justify-content:space-between; align-items:flex-start; padding:14px 16px; pointer-events:none;}
   .pill{background:rgba(255,255,255,.85); border-radius:999px; padding:7px 16px; font-weight:800; color:var(--ink); box-shadow:0 4px 10px rgba(0,0,0,.18); display:flex; align-items:center; gap:7px; font-size:18px;}
@@ -104,7 +125,10 @@
       <button data-d="hard">Hard</button>
     </div>
     <button class="btn" id="playBtn">▶ Play</button>
-    <button class="mini" id="musicBtn">🎵 Music: On</button>
+    <div class="row">
+      <button class="mini" id="musicBtn">🎵 Music: On</button>
+      <button class="mini" id="lbBtn">🏆 Leaderboard</button>
+    </div>
     <div class="help">Move the basket with your <b>finger</b> or the <b>← →</b> keys.<br>Catch fruits &amp; friends, dodge the wiggly bugs!</div>
     <div class="credit" id="brandStart"></div>
   </div>
@@ -126,10 +150,21 @@
 
   <!-- GAME OVER -->
   <div class="screen hidden" id="overScreen">
-    <div class="card">
+    <div class="card scroll">
       <div class="score-lbl">You caught</div>
       <div class="score-big" id="finalScore">0</div>
       <div class="best" id="bestLine">Best: 0</div>
+      <div class="lb" id="lbEntry">
+        <div class="lb-entry">
+          <input id="nameInput" maxlength="12" placeholder="Enter your name" autocomplete="off" spellcheck="false">
+          <button class="btn small" id="submitBtn">🏆 Submit</button>
+        </div>
+        <div class="lb-status" id="lbStatus"></div>
+      </div>
+      <div class="lb">
+        <div class="lb-head">🌍 Global Top 10</div>
+        <ol class="lb-list" id="lbList"><li class="lb-empty">Loading…</li></ol>
+      </div>
       <button class="btn" id="againBtn">↻ Play Again</button>
       <div class="row">
         <a class="btn book" id="etsyBtn" target="_blank" rel="noopener">🧺 Get the Book on Etsy</a>
@@ -137,6 +172,15 @@
       </div>
     </div>
     <div class="credit" id="brandOver"></div>
+  </div>
+
+  <!-- LEADERBOARD VIEW (from title screen) -->
+  <div class="screen hidden" id="lbScreen">
+    <div class="card scroll">
+      <div class="logo" style="text-shadow:none;color:var(--berry)"><span style="font-size:26px">🏆 Global Top 10</span></div>
+      <ol class="lb-list" id="lbList2"><li class="lb-empty">Loading…</li></ol>
+      <button class="btn gold small" id="lbBackBtn">◀ Back</button>
+    </div>
   </div>
 </div>
 
@@ -153,6 +197,60 @@ const CONFIG = {
   roundSeconds: 60,
   sound: true
 };
+
+/* ---------- Global leaderboard (shares the Veggie Racer Supabase DB) ----------
+   Same 'scores' table; game_id keeps this game's board separate.
+   The anon key is public by design and protected by row-level security. */
+const LB = {
+  enabled: true,
+  supabaseUrl: "https://raztximdpreuxrfqifuu.supabase.co",
+  supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhenR4aW1kcHJldXhyZnFpZnV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NjYzMzAsImV4cCI6MjA5ODM0MjMzMH0.S3AP3OIwMBvbcPta4K3oaxjCK5xKBRfnIA_A-8yqg0w",
+  table: "scores",
+  gameId: "fruits-catch",
+  maxRows: 10
+};
+function lbHeaders(){ return {apikey:LB.supabaseAnonKey, Authorization:'Bearer '+LB.supabaseAnonKey, 'Content-Type':'application/json'}; }
+function lbEnabled(){ return !!(LB.enabled && LB.supabaseUrl && !LB.supabaseUrl.includes('YOUR-PROJECT')); }
+function getSavedName(){ return localStorage.getItem('ff_name')||''; }
+function saveName(n){ localStorage.setItem('ff_name', n); }
+async function submitScore(name, sc){
+  saveName(name);
+  if(!lbEnabled()) return {ok:false, reason:'local-only'};
+  try{
+    const res = await fetch(`${LB.supabaseUrl}/rest/v1/${LB.table}`, {
+      method:'POST', headers:{...lbHeaders(), Prefer:'return=minimal'},
+      body: JSON.stringify({game_id:LB.gameId, name:(name||'AAA').slice(0,12), score:Math.round(sc)})
+    });
+    return {ok:res.ok, status:res.status};
+  }catch(e){ return {ok:false, reason:String(e)}; }
+}
+async function getTopScores(){
+  if(!lbEnabled()) return {ok:false, rows:[]};
+  try{
+    const url = `${LB.supabaseUrl}/rest/v1/${LB.table}?select=name,score&game_id=eq.${encodeURIComponent(LB.gameId)}&order=score.desc&limit=${LB.maxRows}`;
+    const res = await fetch(url, {headers: lbHeaders()});
+    if(!res.ok) return {ok:false, rows:[], status:res.status};
+    return {ok:true, rows: await res.json()};
+  }catch(e){ return {ok:false, rows:[], reason:String(e)}; }
+}
+function renderBoard(listEl, rows, myName, myScore){
+  listEl.innerHTML='';
+  if(!rows || !rows.length){ listEl.innerHTML='<li class="lb-empty">No scores yet — be the first! 🍓</li>'; return; }
+  const medals=['🥇','🥈','🥉']; let done=false;
+  rows.forEach((r,i)=>{
+    const li=document.createElement('li');
+    if(!done && myName && r.name===myName && (myScore==null || r.score===myScore)){ li.className='me'; done=true; }
+    li.innerHTML=`<span class="lb-rank">${medals[i]||(i+1)}</span><span class="lb-nm"></span><span class="lb-sc">${r.score}</span>`;
+    li.querySelector('.lb-nm').textContent=r.name||'—';
+    listEl.appendChild(li);
+  });
+}
+async function loadBoard(listEl, myName, myScore){
+  listEl.innerHTML='<li class="lb-empty">Loading…</li>';
+  const res = await getTopScores();
+  if(!res.ok){ listEl.innerHTML='<li class="lb-empty">Leaderboard offline — check your connection.</li>'; return; }
+  renderBoard(listEl, res.rows, myName, myScore);
+}
 
 /* ---------- Difficulty levels (chosen on the title screen) ---------- */
 const DIFFS = {
@@ -493,6 +591,11 @@ function endGame(){
   bestLine.textContent=(score>=best?'🏆 New Best! ':'Best: ')+best;
   hud.classList.add('hidden'); brandHud.classList.remove('hidden');
   overScreen.classList.remove('hidden');
+  // leaderboard: prep name entry + load the global board
+  nameInput.value=getSavedName(); lbStatus.textContent=''; lbStatus.className='lb-status';
+  submitBtn.disabled=false; submitBtn.textContent='🏆 Submit';
+  lbEntry.style.display=(score>0 && lbEnabled())?'':'none';
+  loadBoard(lbList, null, null);
 }
 
 /* ---------- Controls ---------- */
@@ -522,7 +625,11 @@ const hud=document.getElementById('hud'), scoreEl=document.getElementById('score
   startScreen=document.getElementById('startScreen'), countScreen=document.getElementById('countScreen'),
   countNum=document.getElementById('countNum'), pauseScreen=document.getElementById('pauseScreen'),
   overScreen=document.getElementById('overScreen'), finalScore=document.getElementById('finalScore'),
-  bestLine=document.getElementById('bestLine');
+  bestLine=document.getElementById('bestLine'),
+  nameInput=document.getElementById('nameInput'), submitBtn=document.getElementById('submitBtn'),
+  lbStatus=document.getElementById('lbStatus'), lbEntry=document.getElementById('lbEntry'),
+  lbList=document.getElementById('lbList'), lbScreen=document.getElementById('lbScreen'),
+  lbList2=document.getElementById('lbList2');
 
 function play(){ startGame(); startMusic(); }
 document.getElementById('playBtn').onclick=play;
@@ -542,6 +649,22 @@ const diffSeg=document.getElementById('diffSeg');
 document.getElementById('musicBtn').onclick=toggleMusic;
 document.getElementById('musicBtn2').onclick=toggleMusic;
 updateMusicBtns();
+
+// leaderboard: submit score
+submitBtn.onclick=async()=>{
+  const nm=(nameInput.value||'').trim();
+  if(!nm){ nameInput.focus(); lbStatus.textContent='Enter a name first!'; lbStatus.className='lb-status err'; return; }
+  submitBtn.disabled=true; submitBtn.textContent='…'; lbStatus.textContent='Submitting…'; lbStatus.className='lb-status';
+  const res=await submitScore(nm, score);
+  if(res.ok){ lbStatus.textContent='✓ Added to the leaderboard!'; submitBtn.textContent='✓ Done';
+    await loadBoard(lbList, nm.slice(0,12), Math.round(score)); }
+  else{ lbStatus.textContent='Could not submit — check your connection.'; lbStatus.className='lb-status err';
+    submitBtn.disabled=false; submitBtn.textContent='🏆 Submit'; }
+};
+nameInput && nameInput.addEventListener('keydown',e=>{ if(e.key==='Enter') submitBtn.click(); });
+// leaderboard: view from title screen
+document.getElementById('lbBtn').onclick=()=>{ startScreen.classList.add('hidden'); lbScreen.classList.remove('hidden'); loadBoard(lbList2, null, null); };
+document.getElementById('lbBackBtn').onclick=()=>{ lbScreen.classList.add('hidden'); startScreen.classList.remove('hidden'); };
 
 // draw a calm grass+sun scene behind the menus so the canvas is never blank
 function menuScene(){ ctx.clearRect(0,0,W,H); drawBg(); }
