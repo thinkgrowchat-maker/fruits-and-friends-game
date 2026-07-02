@@ -216,21 +216,32 @@ function saveName(n){ localStorage.setItem('ff_name', n); }
 async function submitScore(name, sc){
   saveName(name);
   if(!lbEnabled()) return {ok:false, reason:'local-only'};
+  const nm=(name||'AAA').slice(0,12), val=Math.round(sc);
   try{
+    // only add a row if this beats the name's current best (one entry per name)
+    const q=`${LB.supabaseUrl}/rest/v1/${LB.table}?select=score&game_id=eq.${encodeURIComponent(LB.gameId)}&name=eq.${encodeURIComponent(nm)}&order=score.desc&limit=1`;
+    const cur=await fetch(q,{headers:lbHeaders()});
+    let prevBest=null;
+    if(cur.ok){ const j=await cur.json(); if(j.length) prevBest=j[0].score; }
+    if(prevBest!=null && val<=prevBest) return {ok:true, status:200, improved:false, prevBest};
     const res = await fetch(`${LB.supabaseUrl}/rest/v1/${LB.table}`, {
       method:'POST', headers:{...lbHeaders(), Prefer:'return=minimal'},
-      body: JSON.stringify({game_id:LB.gameId, name:(name||'AAA').slice(0,12), score:Math.round(sc)})
+      body: JSON.stringify({game_id:LB.gameId, name:nm, score:val})
     });
-    return {ok:res.ok, status:res.status};
+    return {ok:res.ok, status:res.status, improved:true};
   }catch(e){ return {ok:false, reason:String(e)}; }
 }
 async function getTopScores(){
   if(!lbEnabled()) return {ok:false, rows:[]};
   try{
-    const url = `${LB.supabaseUrl}/rest/v1/${LB.table}?select=name,score&game_id=eq.${encodeURIComponent(LB.gameId)}&order=score.desc&limit=${LB.maxRows}`;
+    // pull a wider set (score desc) then keep only each name's best
+    const url = `${LB.supabaseUrl}/rest/v1/${LB.table}?select=name,score&game_id=eq.${encodeURIComponent(LB.gameId)}&order=score.desc&limit=200`;
     const res = await fetch(url, {headers: lbHeaders()});
     if(!res.ok) return {ok:false, rows:[], status:res.status};
-    return {ok:true, rows: await res.json()};
+    const all = await res.json();
+    const seen=new Set(), best=[];
+    for(const r of all){ const k=(r.name||'').trim(); if(seen.has(k)) continue; seen.add(k); best.push(r); if(best.length>=LB.maxRows) break; }
+    return {ok:true, rows: best};
   }catch(e){ return {ok:false, rows:[], reason:String(e)}; }
 }
 function renderBoard(listEl, rows, myName, myScore){
@@ -656,8 +667,12 @@ submitBtn.onclick=async()=>{
   if(!nm){ nameInput.focus(); lbStatus.textContent='Enter a name first!'; lbStatus.className='lb-status err'; return; }
   submitBtn.disabled=true; submitBtn.textContent='…'; lbStatus.textContent='Submitting…'; lbStatus.className='lb-status';
   const res=await submitScore(nm, score);
-  if(res.ok){ lbStatus.textContent='✓ Added to the leaderboard!'; submitBtn.textContent='✓ Done';
-    await loadBoard(lbList, nm.slice(0,12), Math.round(score)); }
+  if(res.ok){
+    lbStatus.textContent = (res.improved===false)
+      ? ('Your best of '+res.prevBest+' still stands! 🍓')
+      : '✓ New best — added to the leaderboard!';
+    submitBtn.textContent='✓ Done';
+    await loadBoard(lbList, nm.slice(0,12), null); }
   else{ lbStatus.textContent='Could not submit — check your connection.'; lbStatus.className='lb-status err';
     submitBtn.disabled=false; submitBtn.textContent='🏆 Submit'; }
 };
